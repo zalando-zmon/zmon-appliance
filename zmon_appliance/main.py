@@ -54,7 +54,7 @@ def main():
         for k, v in os.environ.items():
             if k.startswith(artifact.upper().replace('-', '_')):
                 env_vars.append('-e')
-                env_vars.append('{}={}'.format(k, v))
+                env_vars.append('{}={}'.format(k[len(artifact):], v))
         subprocess.check_call(['docker', 'run', '-d', '--net=host', '--name={}'.format(artifact), '--restart=always'] + env_vars + [image])
 
     port = 8080
