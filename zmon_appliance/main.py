@@ -10,7 +10,7 @@ import time
 import tokens
 from flask import Flask
 
-APPLIANCE_VERSION = '1.0'
+APPLIANCE_VERSION = '1'
 POLL_INTERVAL_SECONDS = 70
 
 logger = logging.getLogger('zmon-appliance')
