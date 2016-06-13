@@ -45,18 +45,27 @@ def main():
         artifact_images[artifact] = image
         subprocess.check_call(['docker', 'pull', image])
 
+    credentials_dir = os.getenv('CREDENTIALS_DIR')
+
     for artifact in artifacts:
         image = artifact_images[artifact]
         subprocess.call(['docker', 'kill', artifact])
         subprocess.call(['docker', 'rm', '-f', artifact])
 
-        env_vars = []
+        options = []
         for k, v in os.environ.items():
             prefix = artifact.upper().replace('-', '_') + '_'
             if k.startswith(prefix):
-                env_vars.append('-e')
-                env_vars.append('{}={}'.format(k[len(prefix):], v))
-        subprocess.check_call(['docker', 'run', '-d', '--net=host', '--name={}'.format(artifact), '--restart=always'] + env_vars + [image])
+                options.append('-e')
+                options.append('{}={}'.format(k[len(prefix):], v))
+
+        if credentials_dir:
+            options.append('-e')
+            options.append('CREDENTIALS_DIR={}'.format(credentials_dir))
+            options.append('-v')
+            options.append('{}:{}'.format(credentials_dir, credentials_dir))
+
+        subprocess.check_call(['docker', 'run', '-d', '--net=host', '--name={}'.format(artifact), '--restart=always'] + options + [image])
 
     port = 8080
     http_server = gevent.wsgi.WSGIServer(('', port), app)
