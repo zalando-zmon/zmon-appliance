@@ -1,0 +1,21 @@
+{"redis": {
+		"1.0": {
+			"*": "registry.opensource.zalan.do/stups/redis:3.0.5"
+		}
+	},
+	"zmon-scheduler": {
+		"1.0": {
+			"*": "registry.opensource.zalan.do/stups/zmon-scheduler:cd73"
+		}
+	},
+	"zmon-worker": {
+		"1.0": {
+			"*": "registry.opensource.zalan.do/stups/zmon-worker:cd144"
+		}
+	},
+	"zmon-aws-agent": {
+		"1.0": {
+			"*": "registry.opensource.zalan.do/stups/zmon-aws-agent:cd42"
+		}
+	}
+}
