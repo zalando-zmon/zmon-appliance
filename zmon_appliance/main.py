@@ -65,9 +65,12 @@ def main():
             options.append('-v')
             options.append('{}:{}'.format(credentials_dir, credentials_dir))
 
-        subprocess.check_call(['docker', 'run', '-d', '--net=host', '--name={}'.format(artifact), '--restart=always'] + options + [image])
+        options.append('--log-driver=syslog')
+        options.append('--restart=on-failure:10')
 
-    port = 8080
+        subprocess.check_call(['docker', 'run', '-d', '--net=host', '--name={}'.format(artifact)] + options + [image])
+
+    port = int(os.getenv('ZMON_APPLIANCE_PORT', 9090))
     http_server = gevent.wsgi.WSGIServer(('', port), app)
     logger.info('Listening on port %s..', port)
     http_server.serve_forever()
