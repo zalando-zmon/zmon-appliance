@@ -1,10 +1,15 @@
+import fnmatch
 import gevent.wsgi
 import json
 import logging
 import os
+import pierone.api
 import requests
 import subprocess
+import tokens
 from flask import Flask
+
+APPLIANCE_VERSION = '1.0'
 
 logger = logging.getLogger('zmon-appliance')
 
@@ -27,11 +32,21 @@ def health():
     return json.dumps(data), status_code
 
 
-def get_latest(artifact):
-    url = 'https://registry.opensource.zalan.do/teams/stups/artifacts/{}/tags'.format(artifact)
-    response = requests.get(url, timeout=3)
-    version = response.json()[-1]['name']
-    return version
+def get_image(data, artifact, infrastructure_account):
+    artifact_info = data.get(artifact)
+    if not artifact_info:
+        raise Exception('No version information found for {}'.format(artifact))
+    versions = artifact_info.get(APPLIANCE_VERSION)
+    if not versions:
+        raise Exception('No version information found for {} {}'.format(artifact, APPLIANCE_VERSION))
+    image = None
+    for key, val in sorted(versions.items(), key=lambda x: (-1 * len(x[0]), x)):
+        if fnmatch.fnmatch(infrastructure_account, key):
+            image = val
+            break
+
+    if not image:
+        raise Exception('No version information found for {} in infrastructure account {}'.format(artifact, infrastructure_account))
 
 
 def main():
@@ -39,9 +54,24 @@ def main():
 
     artifact_images = {}
 
+    tokens.configure()
+    tokens.manage('uid', ['uid'])
+    tokens.start()
+
+    infrastructure_account = os.getenv('ZMON_APPLIANCE_INFRASTRUCTURE_ACCOUNT')
+    if not infrastructure_account:
+        raise Exception('ZMON_APPLIANCE_INFRASTRUCTURE_ACCOUNT must be set')
+
+    url = os.getenv('ZMON_APPLIANCE_VERSIONS_URL')
+    if not url:
+        raise Exception('ZMON_APPLIANCE_VERSIONS_URL')
+
+    response = requests.get(url, headers={'Authorization': 'Bearer {}'.format(tokens.get('uid'))}, timeout=3)
+    response.raise_for_status()
+    data = response.json()
+
     for artifact in artifacts:
-        version = get_latest(artifact)
-        image = 'registry.opensource.zalan.do/stups/{}:{}'.format(artifact, version)
+        image = get_image(data, artifact, infrastructure_account)
         artifact_images[artifact] = image
         subprocess.check_call(['docker', 'pull', image])
 

@@ -1,3 +1,5 @@
 requests
 Flask
 gevent>=1.1.1
+stups-tokens
+stups-pierone
