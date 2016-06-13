@@ -58,6 +58,7 @@ def get_image(data, artifact, infrastructure_account):
 
     if not image:
         raise Exception('No version information found for {} in infrastructure account {}'.format(artifact, infrastructure_account))
+    return image
 
 
 def get_artifact_images():
@@ -77,6 +78,7 @@ def get_artifact_images():
 
     for artifact in artifacts:
         image = get_image(data, artifact, infrastructure_account)
+        logger.info('Desired image for {}: {}'.format(artifact, image))
         artifact_images[artifact] = image
 
     return artifact_images
@@ -88,12 +90,12 @@ def poll_for_updates():
         try:
             artifact_images = get_artifact_images()
         except:
-            logging.exception('Failed to poll for updates')
+            logger.exception('Failed to poll for updates')
         else:
             for artifact, image in ARTIFACT_IMAGES.items():
                 desired_image = artifact_images.get(artifact)
                 if desired_image != image:
-                    logging.info('{} is running {}, but needs {}'.format(artifact, image, desired_image))
+                    logger.info('{} is running {}, but needs {}'.format(artifact, image, desired_image))
                     return True
             LAST_POLL[''] = time.time()
 
