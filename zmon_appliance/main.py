@@ -1,4 +1,9 @@
+import gevent.monkey
+
+gevent.monkey.patch_all()
+
 import fnmatch
+import gevent
 import gevent.wsgi
 import json
 import logging
@@ -11,14 +16,13 @@ import tokens
 from flask import Flask
 
 APPLIANCE_VERSION = '1'
-POLL_INTERVAL_SECONDS = 70
 
 logger = logging.getLogger('zmon-appliance')
 
 app = Flask(__name__)
 
-LAST_POLL = {}
 ARTIFACT_IMAGES = {}
+RUNNING_IMAGES = {}
 
 
 @app.route('/health')
@@ -30,13 +34,8 @@ def health():
         data[name] = {'image': image, 'status': status}
     running = {name for name, d in data.items() if d['status'].upper().startswith('UP')}
 
-    needs_update = poll_for_updates()
-
     if running >= set(ARTIFACT_IMAGES.keys()):
-        if needs_update:
-            status_code = 530
-        else:
-            status_code = 200
+        status_code = 200
     else:
         status_code = 503
     return json.dumps(data), status_code
@@ -56,7 +55,7 @@ def get_image(data, artifact, infrastructure_account):
             break
 
     if not image:
-        raise Exception('No version information found for {} in infrastructure account {}'.format(artifact, infrastructure_account))
+        raise Exception('No version information found for {} in account {}'.format(artifact, infrastructure_account))
     return image
 
 
@@ -81,28 +80,68 @@ def get_artifact_images():
 
     for artifact in artifacts:
         image = get_image(data, artifact, infrastructure_account)
-        logger.info('Desired image for {}: {}'.format(artifact, image))
         artifact_images[artifact] = image
 
     return artifact_images
 
 
-def poll_for_updates():
-    seconds_since_poll = time.time() - LAST_POLL.get('', 0)
-    if seconds_since_poll > POLL_INTERVAL_SECONDS:
-        try:
-            artifact_images = get_artifact_images()
-        except:
-            logger.exception('Failed to poll for updates')
-        else:
-            for artifact, image in ARTIFACT_IMAGES.items():
-                desired_image = artifact_images.get(artifact)
-                if desired_image != image:
-                    logger.info('{} is running {}, but needs {}'.format(artifact, image, desired_image))
-                    return True
-            LAST_POLL[''] = time.time()
+def poll_image_versions():
+    artifact_images = get_artifact_images()
+    for artifact, image in artifact_images.items():
+        ARTIFACT_IMAGES[artifact] = image
 
-    return False
+
+def docker_pull(image):
+    if 'pierone' in image:
+        registry, _ = image.split('/', 1)
+        pierone.api.docker_login_with_token('https://' + registry, tokens.get('uid'))
+    subprocess.check_call(['docker', 'pull', image])
+
+
+def docker_run(artifact, image):
+    subprocess.call(['docker', 'kill', artifact])
+    subprocess.call(['docker', 'rm', '-f', artifact])
+
+    options = []
+    for k, v in os.environ.items():
+        prefix = artifact.upper().replace('-', '_') + '_'
+        if k.startswith(prefix):
+            options.append('-e')
+            options.append('{}={}'.format(k[len(prefix):], v))
+
+    credentials_dir = os.getenv('CREDENTIALS_DIR')
+    if credentials_dir:
+        options.append('-e')
+        options.append('CREDENTIALS_DIR={}'.format(credentials_dir))
+        options.append('-v')
+        options.append('{}:{}'.format(credentials_dir, credentials_dir))
+
+    options.append('--log-driver=syslog')
+    options.append('--restart=on-failure:10')
+
+    subprocess.check_call(['docker', 'run', '-d', '--net=host', '--name={}'.format(artifact)] + options + [image])
+    RUNNING_IMAGES[artifact] = image
+
+
+def ensure_image_versions():
+    for artifact, image in sorted(ARTIFACT_IMAGES.items()):
+        running_image = RUNNING_IMAGES.get(artifact)
+        if image != running_image:
+            logger.info('{} is running {}, but needs {}'.format(artifact, running_image, image))
+            docker_pull(image)
+    for artifact, image in sorted(ARTIFACT_IMAGES.items()):
+        if image != RUNNING_IMAGES.get(artifact):
+            docker_run(artifact, image)
+
+
+def background_update():
+    while True:
+        try:
+            poll_image_versions()
+            ensure_image_versions()
+        except:
+            logger.exception('Error in background update')
+        time.sleep(int(os.getenv('ZMON_APPLIANCE_POLL_INTERVAL_SECONDS', 70)))
 
 
 def main():
@@ -112,38 +151,10 @@ def main():
     tokens.manage('uid', ['uid'])
     tokens.start()
 
-    artifact_images = get_artifact_images()
+    poll_image_versions()
+    ensure_image_versions()
 
-    for artifact, image in sorted(artifact_images.items()):
-        if 'pierone' in image:
-            registry, _ = image.split('/', 1)
-            pierone.api.docker_login_with_token('https://' + registry, tokens.get('uid'))
-        subprocess.check_call(['docker', 'pull', image])
-        ARTIFACT_IMAGES[artifact] = image
-
-    credentials_dir = os.getenv('CREDENTIALS_DIR')
-
-    for artifact, image in ARTIFACT_IMAGES.items():
-        subprocess.call(['docker', 'kill', artifact])
-        subprocess.call(['docker', 'rm', '-f', artifact])
-
-        options = []
-        for k, v in os.environ.items():
-            prefix = artifact.upper().replace('-', '_') + '_'
-            if k.startswith(prefix):
-                options.append('-e')
-                options.append('{}={}'.format(k[len(prefix):], v))
-
-        if credentials_dir:
-            options.append('-e')
-            options.append('CREDENTIALS_DIR={}'.format(credentials_dir))
-            options.append('-v')
-            options.append('{}:{}'.format(credentials_dir, credentials_dir))
-
-        options.append('--log-driver=syslog')
-        options.append('--restart=on-failure:10')
-
-        subprocess.check_call(['docker', 'run', '-d', '--net=host', '--name={}'.format(artifact)] + options + [image])
+    gevent.spawn(background_update)
 
     port = int(os.getenv('ZMON_APPLIANCE_PORT', 9090))
     http_server = gevent.wsgi.WSGIServer(('', port), app)
