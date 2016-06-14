@@ -16,7 +16,6 @@ POLL_INTERVAL_SECONDS = 70
 logger = logging.getLogger('zmon-appliance')
 
 app = Flask(__name__)
-artifacts = set(['zmon-scheduler', 'zmon-worker', 'zmon-aws-agent', 'redis'])
 
 LAST_POLL = {}
 ARTIFACT_IMAGES = {}
@@ -33,7 +32,7 @@ def health():
 
     needs_update = poll_for_updates()
 
-    if running >= artifacts:
+    if running >= set(ARTIFACT_IMAGES.keys()):
         if needs_update:
             status_code = 530
         else:
@@ -68,7 +67,11 @@ def get_artifact_images():
 
     url = os.getenv('ZMON_APPLIANCE_VERSIONS_URL')
     if not url:
-        raise Exception('ZMON_APPLIANCE_VERSIONS_URL')
+        raise Exception('ZMON_APPLIANCE_VERSIONS_URL must be set')
+
+    artifacts = set(filter(None, os.getenv('ZMON_APPLIANCE_ARTIFACTS', '').split(',')))
+    if not artifacts:
+        raise Exception('ZMON_APPLIANCE_ARTIFACTS must be set')
 
     response = requests.get(url, headers={'Authorization': 'Bearer {}'.format(tokens.get('uid'))}, timeout=3)
     response.raise_for_status()
@@ -120,8 +123,7 @@ def main():
 
     credentials_dir = os.getenv('CREDENTIALS_DIR')
 
-    for artifact in artifacts:
-        image = ARTIFACT_IMAGES[artifact]
+    for artifact, image in ARTIFACT_IMAGES.items():
         subprocess.call(['docker', 'kill', artifact])
         subprocess.call(['docker', 'rm', '-f', artifact])
 
