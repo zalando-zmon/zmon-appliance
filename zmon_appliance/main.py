@@ -112,6 +112,9 @@ def main():
     artifact_images = get_artifact_images()
 
     for artifact, image in sorted(artifact_images.items()):
+        if 'pierone' in image:
+            registry, _ = image.split('/', 1)
+            pierone.api.docker_login_with_token('https://' + registry, tokens.get('uid'))
         subprocess.check_call(['docker', 'pull', image])
         ARTIFACT_IMAGES[artifact] = image
 
