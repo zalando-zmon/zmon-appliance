@@ -9,6 +9,7 @@ import json
 import logging
 import os
 import pierone.api
+import random
 import requests
 import subprocess
 import time
@@ -72,6 +73,10 @@ def get_artifact_images():
     if not artifacts:
         raise Exception('ZMON_APPLIANCE_ARTIFACTS must be set')
 
+    allowed_registries = set(filter(None, os.getenv('ZMON_APPLIANCE_ALLOWED_REGISTRIES', '').split(',')))
+    if not allowed_registries:
+        raise Exception('ZMON_APPLIANCE_ALLOWED_REGISTRIES must be set (can be "*")')
+
     response = requests.get(url, headers={'Authorization': 'Bearer {}'.format(tokens.get('uid'))}, timeout=3)
     response.raise_for_status()
     data = response.json()
@@ -80,6 +85,10 @@ def get_artifact_images():
 
     for artifact in artifacts:
         image = get_image(data, artifact, infrastructure_account)
+        registry, _ = image.split('/', 1)
+        if registry not in allowed_registries and '*' not in allowed_registries:
+            raise Exception('Image {} is not in any of the allowed registries ({})'.format(image, allowed_registries))
+
         artifact_images[artifact] = image
 
     return artifact_images
@@ -135,13 +144,17 @@ def ensure_image_versions():
 
 
 def background_update():
+    poll_interval = int(os.getenv('ZMON_APPLIANCE_POLL_INTERVAL_SECONDS', 70))
+    # add some randomness to the initial delay
+    initial_delay = random.uniform(poll_interval, poll_interval * 2)
+    time.sleep(initial_delay)
     while True:
         try:
             poll_image_versions()
             ensure_image_versions()
         except:
             logger.exception('Error in background update')
-        time.sleep(int(os.getenv('ZMON_APPLIANCE_POLL_INTERVAL_SECONDS', 70)))
+        time.sleep(poll_interval)
 
 
 def main():
