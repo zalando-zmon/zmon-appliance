@@ -158,14 +158,14 @@ def docker_cleanup():
     containers = [c for c in output.decode('utf-8').strip().split('\n') if output]
     if containers:
         logger.info('Removing exited {} containers {}'.format(len(containers), ' '.join(containers)))
-        subprocess.call(['docker', 'rm', ' '.join(containers)])
+        subprocess.call(['docker', 'rm', *containers])
 
     output = subprocess.check_output(['docker', 'images', '-q'])
     images = [i for i in output.decode('utf-8').strip().split('\n') if output]
 
     if images:
         logger.info('Removing {} images {}'.format(len(images), ' '.join(images)))
-        subprocess.call(['docker', 'rmi', ' '.join(containers)])
+        subprocess.call(['docker', 'rmi', *images])
 
 
 def background_update():
