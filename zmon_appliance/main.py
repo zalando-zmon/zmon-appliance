@@ -1,20 +1,23 @@
 import gevent.monkey
 
-gevent.monkey.patch_all()
+gevent.monkey.patch_all()  # noqa
 
 import fnmatch
-import gevent
-import gevent.wsgi
 import json
 import logging
 import os
-import pierone.api
 import random
-import requests
 import subprocess
 import time
+
+import gevent
+import gevent.wsgi
+import requests
+import pierone.api
 import tokens
+
 from flask import Flask
+
 
 APPLIANCE_VERSION = '1'
 
@@ -133,6 +136,7 @@ def docker_run(artifact, image):
 
 
 def ensure_image_versions():
+    updated = False
     for artifact, image in sorted(ARTIFACT_IMAGES.items()):
         running_image = RUNNING_IMAGES.get(artifact)
         if image != running_image:
@@ -141,6 +145,27 @@ def ensure_image_versions():
     for artifact, image in sorted(ARTIFACT_IMAGES.items()):
         if image != RUNNING_IMAGES.get(artifact):
             docker_run(artifact, image)
+            updated = True
+
+    return updated
+
+
+def docker_cleanup():
+    logger.info('Cleaning up ...')
+
+    output = subprocess.check_output(['docker', 'ps', '-a', '-q', '-f', 'status=exited', '-f', 'status=created'])
+
+    containers = [c for c in output.decode('utf-8').strip().split('\n') if output]
+    if containers:
+        logger.info('Removing exited {} containers {}'.format(len(containers), ' '.join(containers)))
+        subprocess.call(['docker', 'rm', ' '.join(containers)])
+
+    output = subprocess.check_output(['docker', 'images', '-q'])
+    images = [i for i in output.decode('utf-8').strip().split('\n') if output]
+
+    if images:
+        logger.info('Removing {} images {}'.format(len(images), ' '.join(images)))
+        subprocess.call(['docker', 'rmi', ' '.join(containers)])
 
 
 def background_update():
@@ -151,7 +176,9 @@ def background_update():
     while True:
         try:
             poll_image_versions()
-            ensure_image_versions()
+            updated = ensure_image_versions()
+            if updated:
+                docker_cleanup()
         except:
             logger.exception('Error in background update')
         time.sleep(poll_interval)
