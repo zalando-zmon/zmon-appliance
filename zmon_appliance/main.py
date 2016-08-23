@@ -151,7 +151,7 @@ def ensure_image_versions():
 
 
 def docker_cleanup():
-    logger.info('Cleaning up ...')
+    logger.info('Cleaning up..')
 
     output = subprocess.check_output(['docker', 'ps', '-a', '-q', '-f', 'status=exited', '-f', 'status=created'])
 
