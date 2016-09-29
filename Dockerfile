@@ -1,4 +1,4 @@
-FROM registry.opensource.zalan.do/stups/python:3.5.1-30
+FROM registry.opensource.zalan.do/stups/python:3.5.2-38
 
 RUN apt-get update && apt-get install -y libffi-dev libssl-dev
 
