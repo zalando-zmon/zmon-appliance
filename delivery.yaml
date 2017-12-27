@@ -26,7 +26,6 @@ build_steps:
     then
       RELEASE_VERSION=$(git describe --tags --always --dirty)
       AGENT_IMAGE=registry-write.opensource.zalan.do/zmon/zmon-appliance:${RELEASE_VERSION}
-      registry-write.opensource.zalan.do/stups
     else
       AGENT_IMAGE=registry-write.opensource.zalan.do/zmon/zmon-appliance:${CDP_BUILD_VERSION}
     fi
