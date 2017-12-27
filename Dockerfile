@@ -11,5 +11,3 @@ RUN pip3 install -r /app/requirements.txt
 COPY zmon_appliance /app/zmon_appliance
 
 CMD python3 -m zmon_appliance
-
-COPY scm-source.json /

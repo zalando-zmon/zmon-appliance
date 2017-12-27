@@ -179,7 +179,7 @@ def background_update():
             updated = ensure_image_versions()
             if updated:
                 docker_cleanup()
-        except:
+        except Exception:
             logger.exception('Error in background update')
         time.sleep(poll_interval)
 
