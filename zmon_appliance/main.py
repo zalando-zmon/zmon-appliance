@@ -11,7 +11,7 @@ import subprocess
 import time
 
 import gevent
-import gevent.wsgi
+import gevent.pywsgi
 import requests
 import pierone.api
 import tokens
@@ -197,6 +197,6 @@ def main():
     gevent.spawn(background_update)
 
     port = int(os.getenv('ZMON_APPLIANCE_PORT', 9090))
-    http_server = gevent.wsgi.WSGIServer(('', port), app)
+    http_server = gevent.pywsgi.WSGIServer(('', port), app)
     logger.info('Listening on port %s..', port)
     http_server.serve_forever()
